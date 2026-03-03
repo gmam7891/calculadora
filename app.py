@@ -185,126 +185,58 @@ with tabs[0]:
 # -------------------
 with tabs[1]:
     st.subheader("Twitch — Avg Viewers / Peak (30d) + Projeções")
-    tc = None
-    if client_id and client_secret:
-        try:
-            tc = TwitchClient(client_id, client_secret)
-        except Exception:
-            tc = None
+    # ... (todo o código que você já tem até o final das projeções fica igual)
+
+    # ==================== NOVA SEÇÃO: PROJEÇÕES FINANCEIRAS ====================
+    st.markdown("---")
+    st.subheader("💰 Projeções Financeiras (FTD + Receita + Lucro/Prejuízo)")
+
+    # Inputs específicos pro Twitch (pode deixar fixo ou deixar editável)
+    twitch_ctr = st.number_input("CTR Twitch (chat + overlay)", min_value=0.0, value=0.0025, step=0.0005, format="%.6f", help="Valor típico no nicho slots: 0,001 ~ 0,005")
+    
+    # Reusa os valores que você já tem na aba Influenciador (melhor UX)
+    use_same_cvr = st.checkbox("Usar mesmo CVR e Valor por FTD da aba Influenciador", value=True)
+    if use_same_cvr:
+        twitch_cvr = cvr_ftd
+        twitch_value_per_ftd = value_per_ftd
     else:
-        st.warning("Sem credenciais no .env: VOD summary e status LIVE ficarão indisponíveis.")
+        twitch_cvr = st.number_input("CVR Twitch para FTD", min_value=0.0, value=0.015, step=0.001, format="%.6f")
+        twitch_value_per_ftd = st.number_input("Valor por FTD (R$)", min_value=0.0, value=600.0, step=50.0)
 
-    left, right = st.columns([1, 2])
+    # Calcula usando as projeções que você já tem
+    proj_unique = proj["projected_unique_views"] or 0
+    proj_hours = proj["projected_hours_watched"] or 0
 
-    with left:
-        default_list = load_streamers_file("streamers.txt")
-        channel = st.text_input("Canal (login)", value=(default_list[0] if default_list else "shroud")).lower().strip()
+    # Funil Twitch
+    twitch_clicks = proj_unique * twitch_ctr
+    twitch_ftd = twitch_clicks * twitch_cvr
+    twitch_revenue = twitch_ftd * twitch_value_per_ftd
+    twitch_roi = ((twitch_revenue - fee) / fee) if fee > 0 else 0
+    twitch_cpa = (fee / twitch_ftd) if twitch_ftd > 0 else None
+    twitch_roas = (twitch_revenue / fee) if fee > 0 else 0
 
-        planned_hours = st.number_input("Horas contratadas (mês)", min_value=0.0, value=20.0, step=1.0)
-        churn_factor = st.number_input("Fator de churn (estimativa p/ views únicas)", min_value=0.5, value=2.5, step=0.1)
+    # Métricas bonitinhas
+    f1, f2, f3, f4 = st.columns(4)
+    f1.metric("Cliques estimados (Twitch)", fmt_int(twitch_clicks))
+    f2.metric("FTD projetado", fmt_float(twitch_ftd, 1))
+    f3.metric("Receita projetada", fmt_money(twitch_revenue))
+    f4.metric("ROAS", fmt_float(twitch_roas, 2))
 
-        st.markdown("### Bootstrap (se ainda não tem histórico)")
-        use_manual = st.checkbox("Usar valores manuais (até o coletor formar base)", value=False)
-        manual_avg = st.number_input("Avg viewers manual", min_value=0.0, value=0.0, step=50.0) if use_manual else None
-        manual_peak = st.number_input("Peak manual", min_value=0, value=0, step=100) if use_manual else None
+    g1, g2, g3, g4 = st.columns(4)
+    g1.metric("CPA (FTD)", fmt_money(twitch_cpa))
+    g2.metric("ROI", fmt_float(twitch_roi, 2))
+    g3.metric("Lucro/Prejuízo esperado", fmt_money(twitch_revenue - fee))
+    g4.metric("Fee máximo (ROI alvo)", fmt_money(fee_max_by_roi(twitch_revenue, target_roi)))
 
-        vod_n = st.number_input("VODs (últimos N) para média", min_value=1, max_value=100, value=20, step=1)
-        refresh_vods = st.button("Atualizar VOD summary")
+    # Veredito forte
+    if twitch_roi >= target_roi and (twitch_cpa is None or twitch_cpa <= target_cpa):
+        st.success("✅ **LUCRATIVO** — Fee vale muito a pena!")
+    elif twitch_roi >= 0:
+        st.warning("⚠️ Margem positiva, mas não bate suas metas. Negociar fee ou horas.")
+    else:
+        st.error("❌ **PREJUÍZO** — Não compensa pagar esse fee com o volume atual.")
 
-    with right:
-        if not channel:
-            st.info("Digite um login de canal.")
-        else:
-            stats = storage.get_stream_stats_30d(conn, channel)
-            avg_30d = stats["avg_viewers_30d"]
-            peak_30d = stats["peak_viewers_30d"]
-
-            is_live_now = None
-            live_viewers_now = None
-            if tc:
-                try:
-                    live_map = tc.get_streams_by_logins([channel])
-                    s = live_map.get(channel)
-                    if s:
-                        is_live_now = True
-                        live_viewers_now = int(s.get("viewer_count", 0))
-                    else:
-                        is_live_now = False
-                except Exception:
-                    is_live_now = None
-
-            vod_cached = storage.get_cached_vod_summary(conn, channel, max_age_hours=12)
-
-            if refresh_vods:
-                if not tc:
-                    st.error("Sem credenciais válidas para atualizar VOD summary.")
-                else:
-                    try:
-                        users = tc.get_users_by_logins([channel])
-                        u = users.get(channel)
-                        if not u:
-                            st.error("Canal não encontrado na Twitch API.")
-                        else:
-                            vods = tc.get_vods_by_user_id(u["id"], first=int(vod_n))
-                            vs = vod_summary(vods)
-                            if vs["vod_count"] > 0 and vs["avg_vod_views"] is not None and vs["views_per_hour"] is not None:
-                                storage.upsert_vod_summary(
-                                    conn,
-                                    channel,
-                                    vs["vod_count"],
-                                    float(vs["avg_vod_views"]),
-                                    float(vs["median_vod_views"] or 0.0),
-                                    float(vs["views_per_hour"]),
-                                )
-                                vod_cached = storage.get_cached_vod_summary(conn, channel, max_age_hours=999999)
-                            else:
-                                st.warning("Não foi possível calcular VOD summary (sem VODs suficientes).")
-                    except Exception as e:
-                        st.error(f"Erro ao atualizar VOD summary: {e}")
-
-            avg_used = manual_avg if use_manual else avg_30d
-            peak_used = manual_peak if use_manual else peak_30d
-
-            top = st.columns(6)
-            top[0].metric("Status agora", "LIVE" if is_live_now else ("OFF" if is_live_now is False else "-"))
-            top[1].metric("Viewers agora", fmt_int(live_viewers_now))
-            top[2].metric("Avg viewers (30d)", fmt_int(avg_30d))
-            top[3].metric("Peak (30d)", fmt_int(peak_30d))
-            top[4].metric("Amostras LIVE (30d)", fmt_int(stats["live_samples_30d"]))
-            top[5].metric("Última amostra", stats["last_any_sample_utc"] or "-")
-
-            st.markdown("---")
-            st.subheader("Projeções (com base no histórico local)")
-
-            vod_vph = vod_cached["views_per_hour"] if vod_cached else None
-            proj = project_twitch(
-                planned_hours=planned_hours,
-                avg_viewers_30d=avg_used,
-                peak_30d=int(peak_used) if peak_used is not None else None,
-                churn_factor=churn_factor,
-                vod_views_per_hour=vod_vph,
-            )
-
-            p1, p2, p3, p4 = st.columns(4)
-            p1.metric("Avg viewers projetado", fmt_int(proj["projected_avg_viewers"]))
-            p2.metric("Peak projetado", fmt_int(proj["projected_peak"]))
-            p3.metric("Hours watched (proj.)", fmt_int(proj["projected_hours_watched"]))
-            p4.metric("Views únicas (proj.)", fmt_int(proj["projected_unique_views"]))
-
-            st.caption("Obs.: ‘views únicas’ é uma estimativa usando churn_factor. Ajuste conforme sua realidade.")
-
-            st.markdown("### VOD summary (Twitch API)")
-            if vod_cached:
-                v1, v2, v3, v4 = st.columns(4)
-                v1.metric("VODs (cache)", fmt_int(vod_cached["vod_count"]))
-                v2.metric("Avg views por VOD", fmt_int(vod_cached["avg_vod_views"]))
-                v3.metric("Views por hora (VOD)", fmt_int(vod_cached["views_per_hour"]))
-                v4.metric("Cache atualizado", vod_cached["updated_at_utc"])
-                if proj["projected_vod_views"] is not None:
-                    st.metric("VOD views (estimado p/ horas contratadas)", fmt_int(proj["projected_vod_views"]))
-            else:
-                st.info("Sem VOD summary em cache. Clique em 'Atualizar VOD summary' (com credenciais no .env).")
-
+    st.caption("Obs.: CTR Twitch é conservador. Ajuste conforme histórico real do streamer.")
 # -------------------
 # Como rodar
 # -------------------
