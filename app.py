@@ -181,62 +181,144 @@ with tabs[0]:
             st.error("❌ Cenário ruim (não bate metas) — renegociar fee/entregas ou revisar premissas.")
 
 # -------------------
-# Twitch
+# Twitch — 100% AUTOMÁTICO + SÓ VIRTUAL CASINO
 # -------------------
 with tabs[1]:
-    st.subheader("Twitch — Avg Viewers / Peak (30d) + Projeções")
-    # ... (todo o código que você já tem até o final das projeções fica igual)
-
-    # ==================== NOVA SEÇÃO: PROJEÇÕES FINANCEIRAS ====================
-    st.markdown("---")
-    st.subheader("💰 Projeções Financeiras (FTD + Receita + Lucro/Prejuízo)")
-
-    # Inputs específicos pro Twitch (pode deixar fixo ou deixar editável)
-    twitch_ctr = st.number_input("CTR Twitch (chat + overlay)", min_value=0.0, value=0.0025, step=0.0005, format="%.6f", help="Valor típico no nicho slots: 0,001 ~ 0,005")
+    st.subheader("Twitch — Virtual Casino (Automático como SullyGnome)")
     
-    # Reusa os valores que você já tem na aba Influenciador (melhor UX)
-    use_same_cvr = st.checkbox("Usar mesmo CVR e Valor por FTD da aba Influenciador", value=True)
-    if use_same_cvr:
-        twitch_cvr = cvr_ftd
-        twitch_value_per_ftd = value_per_ftd
+    tc = None
+    if client_id and client_secret:
+        try:
+            tc = TwitchClient(client_id, client_secret)
+        except Exception:
+            tc = None
     else:
-        twitch_cvr = st.number_input("CVR Twitch para FTD", min_value=0.0, value=0.015, step=0.001, format="%.6f")
-        twitch_value_per_ftd = st.number_input("Valor por FTD (R$)", min_value=0.0, value=600.0, step=50.0)
+        st.error("❌ Sem credenciais no .env — dados ao vivo e VOD não vão funcionar.")
 
-    # Calcula usando as projeções que você já tem
-    proj_unique = proj["projected_unique_views"] or 0
-    proj_hours = proj["projected_hours_watched"] or 0
+    left, right = st.columns([1, 2])
+    with left:
+        default_list = load_streamers_file("streamers.txt")
+        channel = st.text_input("Canal (login)", value=(default_list[0] if default_list else "exemplo")).lower().strip()
 
-    # Funil Twitch
-    twitch_clicks = proj_unique * twitch_ctr
-    twitch_ftd = twitch_clicks * twitch_cvr
-    twitch_revenue = twitch_ftd * twitch_value_per_ftd
-    twitch_roi = ((twitch_revenue - fee) / fee) if fee > 0 else 0
-    twitch_cpa = (fee / twitch_ftd) if twitch_ftd > 0 else None
-    twitch_roas = (twitch_revenue / fee) if fee > 0 else 0
+        planned_hours = st.number_input("Horas contratadas (mês)", min_value=0.0, value=20.0, step=1.0)
+        churn_factor = st.number_input("Fator de churn (views únicas)", min_value=0.5, value=2.5, step=0.1)
+        vod_n = st.number_input("VODs para média (últimos N)", min_value=1, max_value=100, value=20, step=1)
 
-    # Métricas bonitinhas
-    f1, f2, f3, f4 = st.columns(4)
-    f1.metric("Cliques estimados (Twitch)", fmt_int(twitch_clicks))
-    f2.metric("FTD projetado", fmt_float(twitch_ftd, 1))
-    f3.metric("Receita projetada", fmt_money(twitch_revenue))
-    f4.metric("ROAS", fmt_float(twitch_roas, 2))
+    with right:
+        if not channel:
+            st.info("Digite o login do canal para carregar tudo automaticamente.")
+        else:
+            # === 1. Stats do banco (coletor automático) ===
+            stats = storage.get_stream_stats_30d(conn, channel)
+            avg_30d = stats["avg_viewers_30d"]
+            peak_30d = stats["peak_viewers_30d"]
 
-    g1, g2, g3, g4 = st.columns(4)
-    g1.metric("CPA (FTD)", fmt_money(twitch_cpa))
-    g2.metric("ROI", fmt_float(twitch_roi, 2))
-    g3.metric("Lucro/Prejuízo esperado", fmt_money(twitch_revenue - fee))
-    g4.metric("Fee máximo (ROI alvo)", fmt_money(fee_max_by_roi(twitch_revenue, target_roi)))
+            # === 2. Status ao vivo + verificação Virtual Casino ===
+            is_live_now = False
+            live_viewers_now = None
+            game_name = None
+            game_id = None
+            is_casino = False
 
-    # Veredito forte
-    if twitch_roi >= target_roi and (twitch_cpa is None or twitch_cpa <= target_cpa):
-        st.success("✅ **LUCRATIVO** — Fee vale muito a pena!")
-    elif twitch_roi >= 0:
-        st.warning("⚠️ Margem positiva, mas não bate suas metas. Negociar fee ou horas.")
-    else:
-        st.error("❌ **PREJUÍZO** — Não compensa pagar esse fee com o volume atual.")
+            if tc:
+                try:
+                    live_map = tc.get_streams_by_logins([channel])
+                    s = live_map.get(channel)
+                    if s:
+                        is_live_now = True
+                        live_viewers_now = int(s.get("viewer_count", 0))
+                        game_id = s.get("game_id")
+                        game_name = s.get("game_name")
+                        is_casino = str(game_id) == "45517"  # Virtual Casino oficial
+                except Exception as e:
+                    st.warning(f"Erro ao checar live: {e}")
 
-    st.caption("Obs.: CTR Twitch é conservador. Ajuste conforme histórico real do streamer.")
+            # === 3. VOD Summary (atualiza automático se cache velho) ===
+            vod_cached = storage.get_cached_vod_summary(conn, channel, max_age_hours=12)
+            if (not vod_cached or vod_cached.get("vod_count", 0) == 0) and tc:
+                with st.spinner("Atualizando VOD summary automaticamente..."):
+                    try:
+                        users = tc.get_users_by_logins([channel])
+                        u = users.get(channel)
+                        if u:
+                            vods = tc.get_vods_by_user_id(u["id"], first=int(vod_n))
+                            vs = vod_summary(vods)
+                            if vs["vod_count"] > 0 and vs["views_per_hour"]:
+                                storage.upsert_vod_summary(
+                                    conn, channel,
+                                    vs["vod_count"],
+                                    float(vs["avg_vod_views"]),
+                                    float(vs["median_vod_views"] or 0),
+                                    float(vs["views_per_hour"])
+                                )
+                                vod_cached = storage.get_cached_vod_summary(conn, channel, max_age_hours=999999)
+                    except Exception as e:
+                        st.error(f"Erro ao atualizar VOD: {e}")
+
+            # === Métricas principais ===
+            top = st.columns(6)
+            top[0].metric("Status agora", "✅ LIVE" if is_live_now else "⭕ OFF")
+            top[1].metric("Viewers agora", fmt_int(live_viewers_now))
+            top[2].metric("Avg viewers (30d)", fmt_int(avg_30d))
+            top[3].metric("Peak (30d)", fmt_int(peak_30d))
+            top[4].metric("Amostras LIVE (30d)", fmt_int(stats["live_samples_30d"]))
+            top[5].metric("Categoria", game_name or "-")
+
+            # === VERIFICAÇÃO VIRTUAL CASINO ===
+            if game_id and not is_casino:
+                st.error(f"❌ Este canal NÃO está na categoria **Virtual Casino** (game_id: {game_id}).\n"
+                         "O valuation financeiro só funciona para Virtual Casino.")
+                st.stop()  # para aqui e não mostra projeções
+
+            if not stats or avg_30d is None:
+                st.warning("⚠️ Ainda não tem dados no banco para esse canal.\n"
+                           "Deixe o coletor rodando (`python src/collector.py`) por algumas horas.")
+
+            # === PROJEÇÕES (automáticas) ===
+            st.markdown("---")
+            st.subheader("💰 Projeções Financeiras (FTD + Receita + Lucro)")
+
+            vod_vph = vod_cached["views_per_hour"] if vod_cached else None
+            proj = project_twitch(
+                planned_hours=planned_hours,
+                avg_viewers_30d=avg_30d,
+                peak_30d=int(peak_30d) if peak_30d else None,
+                churn_factor=churn_factor,
+                vod_views_per_hour=vod_vph,
+            )
+
+            # === Inputs financeiros (reusando da aba Influenciador) ===
+            twitch_ctr = st.number_input("CTR Twitch (chat + overlay)", min_value=0.0, value=0.0025, step=0.0005, format="%.6f", help="Típico de Virtual Casino BR: 0.001 ~ 0.005")
+
+            twitch_clicks = (proj["projected_unique_views"] or 0) * twitch_ctr
+            twitch_ftd = twitch_clicks * cvr_ftd
+            twitch_revenue = twitch_ftd * value_per_ftd
+            twitch_roi = ((twitch_revenue - fee) / fee) if fee > 0 else 0
+            twitch_cpa = (fee / twitch_ftd) if twitch_ftd > 0 else None
+            twitch_roas = (twitch_revenue / fee) if fee > 0 else 0
+
+            f1, f2, f3, f4 = st.columns(4)
+            f1.metric("Cliques estimados", fmt_int(twitch_clicks))
+            f2.metric("FTD projetado", fmt_float(twitch_ftd, 1))
+            f3.metric("Receita projetada", fmt_money(twitch_revenue))
+            f4.metric("ROAS", fmt_float(twitch_roas, 2))
+
+            g1, g2, g3, g4 = st.columns(4)
+            g1.metric("CPA (FTD)", fmt_money(twitch_cpa))
+            g2.metric("ROI", fmt_float(twitch_roi, 2))
+            g3.metric("Lucro/Prejuízo", fmt_money(twitch_revenue - fee))
+            g4.metric("Fee máx (ROI alvo)", fmt_money(fee_max_by_roi(twitch_revenue, target_roi)))
+
+            if twitch_roi >= target_roi and (twitch_cpa is None or twitch_cpa <= target_cpa):
+                st.success("✅ **LUCRATIVO** — Vale muito a pena pagar esse fee!")
+            elif twitch_roi >= 0:
+                st.warning("⚠️ Margem positiva, mas não bate meta.")
+            else:
+                st.error("❌ **PREJUÍZO** — Não compensa esse canal com o fee atual.")
+
+            # VOD cache info
+            if vod_cached:
+                st.caption(f"VOD summary atualizado em: {vod_cached['updated_at_utc']}")
 # -------------------
 # Como rodar
 # -------------------
