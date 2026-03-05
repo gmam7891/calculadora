@@ -1,12 +1,15 @@
 FROM python:3.11-slim
 
-# Instala tudo necessário (ICU + ffmpeg)
+# Instala tudo necessário + ICU + variável que resolve o erro .NET
 RUN apt-get update && apt-get install -y \
-    libicu72 \
-    ffmpeg \
     wget \
     unzip \
+    ffmpeg \
+    libicu72 \
+    tzdata \
     && rm -rf /var/lib/apt/lists/*
+
+ENV DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=true
 
 WORKDIR /app
 
