@@ -1,4 +1,4 @@
-name: Analisa Tempo dos Slots (Área Link e mais)
+name: Analisa Tempo dos Slots (Área Link)
 
 on:
   workflow_dispatch:
@@ -19,7 +19,7 @@ jobs:
           chmod +x TwitchDownloaderCLI
 
       - name: Pegar capítulos da VOD
-        run: ./TwitchDownloaderCLI info --id ${{ inputs.vod_id }} --format raw > vod_info.json
+        run: ./TwitchDownloaderCLI info --id ${{ inputs.vod_id }} --format json > vod_info.json
 
       - name: Calcular tempo de todos os jogos
         run: |
@@ -29,12 +29,7 @@ import json, re
 with open('vod_info.json') as f:
     data = json.load(f)
 
-chapters = []
-if isinstance(data, dict):
-    if 'chapters' in data and isinstance(data['chapters'], list):
-        chapters = data['chapters']
-    elif 'video' in data and 'chapters' in data['video']:
-        chapters = data['video']['chapters']
+chapters = data.get('chapters') or (data.get('video', {}).get('chapters') if isinstance(data, dict) else [])
 
 print("# 🎰 Relatório de Tempo dos Slots - VOD ${{ inputs.vod_id }}")
 print("| Jogo                          | Tempo (minutos) |")
@@ -57,21 +52,16 @@ total_area_link = 0
 for nome, padrao in jogos:
     tempo_seg = 0
     regex = re.compile(padrao, re.IGNORECASE)
-    
     for ch in chapters:
         titulo = str(ch.get('title') or ch.get('game') or ch.get('description') or ch.get('name') or '')
         if regex.search(titulo):
-            seg = ch.get('length') or ch.get('lengthSeconds') or 0
-            if seg == 0 and 'end' in ch and 'start' in ch:
-                seg = ch['end'] - ch['start']
-            tempo_seg += int(seg)
-    
+            seg = ch.get('length') or ch.get('lengthSeconds') or (ch.get('end', 0) - ch.get('start', 0))
+            tempo_seg += int(seg or 0)
     minutos = tempo_seg // 60
     print(f"| {nome:<30} | {minutos:>10} min  |")
-    
     if "Area Link" in nome:
         total_area_link += minutos
 
-print("\n**Total Família Area Link™:**", total_area_link, "minutos")
+print(f"\n**Total Família Area Link™: {total_area_link} minutos**")
 print("\n✅ Análise concluída automaticamente!")
 EOF
