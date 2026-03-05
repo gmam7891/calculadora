@@ -96,12 +96,12 @@ st.markdown("""
             padding-top: 0.5rem !important;
         }
         .stImage {
-            margin-top: -40px !important;
+            margin-top: -60px !important;
             margin-bottom: -20px !important;
         }
     </style>
 """, unsafe_allow_html=True)
-st.image("logo_gmcr.png", width=250)
+st.image("logo_gmcr.png", width=300)
 st.title("Valuation Instagram & Twitch")
 
 client_id = os.getenv("TWITCH_CLIENT_ID", "")
