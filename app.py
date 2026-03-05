@@ -6,6 +6,7 @@ import streamlit as st
 import pandas as pd
 from dotenv import load_dotenv
 import google.generativeai as genai
+from typing import Dict, Any, List, Optional
 
 from twitch_client import TwitchClient
 from storage import connect, init_db, get_stream_stats_30d, get_cached_vod_summary
