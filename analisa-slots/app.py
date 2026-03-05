@@ -1,3 +1,4 @@
+cat > app.py << 'EOF'
 from fastapi import FastAPI
 from fastapi.responses import HTMLResponse
 import json, re, subprocess
@@ -18,26 +19,18 @@ JOGOS = [
 
 @app.get("/")
 def analisar(vod_id: str = "2712188263"):
-    cli_path = "/app/TwitchDownloaderCLI"
-    
     try:
-        # Sem flag -o → capturamos direto o stdout
         result = subprocess.run([
-            cli_path, "info",
+            "/app/TwitchDownloaderCLI", "info",
             "--id", vod_id,
             "--format", "json"
         ], capture_output=True, text=True, timeout=60)
 
         if result.returncode != 0:
-            return HTMLResponse(f"""
-                <h2>❌ Erro no TwitchDownloaderCLI</h2>
-                <pre>STDERR: {result.stderr}</pre>
-                <pre>STDOUT: {result.stdout}</pre>
-            """)
+            return HTMLResponse(f"<h2>❌ Erro CLI</h2><pre>{result.stderr}</pre>")
 
         data = json.loads(result.stdout)
-
-        chapters = data.get('chapters') or (data.get('video', {}).get('chapters') if isinstance(data, dict) else [])
+        chapters = data.get('chapters') or []
 
         html = f"<h1>🎰 Análise VOD {vod_id}</h1><table border='1' cellpadding='10'><tr><th>Jogo</th><th>Tempo (minutos)</th></tr>"
         total_area_link = 0
@@ -46,18 +39,17 @@ def analisar(vod_id: str = "2712188263"):
             tempo_seg = 0
             regex = re.compile(padrao, re.IGNORECASE)
             for ch in chapters:
-                titulo = str(ch.get('title') or ch.get('game') or ch.get('description') or ch.get('name') or '')
+                titulo = str(ch.get('title') or ch.get('game') or "")
                 if regex.search(titulo):
-                    seg = ch.get('length') or ch.get('lengthSeconds') or (ch.get('end', 0) - ch.get('start', 0))
-                    tempo_seg += int(seg or 0)
+                    seg = ch.get('length') or ch.get('lengthSeconds') or 0
+                    tempo_seg += int(seg)
             minutos = tempo_seg // 60
             html += f"<tr><td>{nome}</td><td align='center'><b>{minutos}</b></td></tr>"
             if "Area Link" in nome:
                 total_area_link += minutos
 
-        html += f"</table><h2>Total Família Area Link™: <b>{total_area_link} minutos</b></h2>"
-        html += "<p>✅ Análise concluída com sucesso!</p>"
+        html += f"</table><h2>Total Família Area Link™: <b>{total_area_link} minutos</b></h2><p>✅ Pronto!</p>"
         return HTMLResponse(html)
-
     except Exception as e:
-        return HTMLResponse(f"<h2>❌ Erro geral: {str(e)}</h2>")
+        return HTMLResponse(f"<h2>❌ Erro: {str(e)}</h2>")
+EOF
