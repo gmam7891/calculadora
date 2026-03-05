@@ -1,19 +1,23 @@
 import sys
 import os
-sys.path.insert(0, os.path.abspath("."))
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+import re
+import statistics
+from typing import Dict, Any, List, Optional
 
 import streamlit as st
 import pandas as pd
 from dotenv import load_dotenv
-import google.generativeai as genai
-from typing import Dict, Any, List, Optional
 
 from twitch_client import TwitchClient
-from storage import connect, init_db, get_stream_stats_30d, get_cached_vod_summary
+from storage import connect, init_db, get_stream_stats_30d, upsert_vod_summary, get_cached_vod_summary
 from influencer_metrics import influencer_calcs, fee_max_by_roi, fee_max_by_cpa
 from projections import project_twitch
 
 load_dotenv()
+
 
 # ==================== FUNÇÕES DE FORMATAÇÃO ====================
 def fmt_money(v, prefix="R$ "):
@@ -173,21 +177,6 @@ with tabs[0]:
         else:
             st.error("❌ PREJUÍZO")
 
-# ===================== CONFIG GEMINI =====================
-genai.configure(api_key=os.getenv("GEMINI_API_KEY"))  # ← coloque sua chave aqui
-
-# ===================== FORMATAÇÃO =====================
-def fmt_money(v, prefix="R$ "):
-    if v is None: return "-"
-    return f"{prefix}{v:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
-
-def fmt_int(v):
-    if v is None: return "-"
-    return f"{int(round(v)):,}".replace(",", ".")
-
-st.set_page_config(page_title="Valuation Instagram & Twitch", layout="wide")
-st.title("Valuation Instagram & Twitch")
-
 # ==================== ABA TWITCH ====================
 with tabs[1]:
     st.subheader("Twitch — Virtual Casino")
@@ -288,28 +277,3 @@ with tabs[1]:
                     st.warning("⚠️ Margem positiva")
                 else:
                     st.error("❌ PREJUÍZO")
-
-# ===================== NOVA ABA: IMPORTAR SCREENSHOT =====================
-with tabs[3]:
-    st.subheader("📸 Importar Screenshot do Modash (Instagram / TikTok)")
-    st.write("Tire uma print da tela do Modash e faça upload. A IA vai ler tudo e preencher automaticamente.")
-
-    uploaded_file = st.file_uploader("Escolha a screenshot", type=["png", "jpg", "jpeg"])
-
-    if uploaded_file:
-        with st.spinner("🤖 Lendo a imagem com IA (Gemini)..."):
-            model = genai.GenerativeModel("gemini-1.5-flash")
-            response = model.generate_content([
-                "Extraia todas as métricas visíveis desta screenshot do Modash. Retorne em formato JSON com os seguintes campos: followers, avg_likes, avg_comments, avg_views, engagement_rate, reel_views, story_views, ctr_reels, ctr_stories, cvr. Se não encontrar algum valor, coloque 0.",
-                uploaded_file
-            ])
-
-            try:
-                dados = response.text  # a IA retorna texto com JSON
-                st.success("✅ Dados extraídos com sucesso!")
-                st.json(dados)  # mostra o que a IA leu
-                # Aqui você pode adicionar o auto-preenchimento dos campos do Instagram
-            except:
-                st.error("Não consegui ler a imagem. Tente outra screenshot.")
-
-st.caption("App rodando 24/7 no Google Cloud")
