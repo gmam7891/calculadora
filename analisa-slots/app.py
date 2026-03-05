@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.responses import HTMLResponse
-import json, re, subprocess
+import json, re, subprocess, os
 
 app = FastAPI(title="Analisador de Slots")
 
@@ -22,19 +22,22 @@ def analisar(vod_id: str = "2712188263"):
     output_file = "vod_info.json"
     
     try:
-        # Comando corrigido com caminho ABSOLUTO e flags corretas
+        # Debug: mostra arquivos na pasta
+        files = os.listdir("/app")
+        
         result = subprocess.run([
             cli_path, "info",
             "--id", vod_id,
-            "--format", "json",      # mais confiável que raw
+            "--format", "json",
             "-o", output_file
-        ], capture_output=True, text=True, timeout=45)
+        ], capture_output=True, text=True, timeout=60)
         
         if result.returncode != 0:
             return HTMLResponse(f"""
-                <h2>❌ Erro ao rodar TwitchDownloaderCLI</h2>
-                <pre>{result.stderr}</pre>
-                <p>Stdout: {result.stdout}</p>
+                <h2>❌ Erro no TwitchDownloaderCLI</h2>
+                <p>Arquivos na pasta: {files}</p>
+                <pre>STDERR: {result.stderr}</pre>
+                <pre>STDOUT: {result.stdout}</pre>
             """)
         
         with open(output_file) as f:
@@ -66,5 +69,5 @@ def analisar(vod_id: str = "2712188263"):
         return HTMLResponse(f"""
             <h2>❌ Erro geral</h2>
             <pre>{str(e)}</pre>
-            <p>Verifique se o TwitchDownloaderCLI está em /app/</p>
+            <p>Verifique o log completo no Cloud Run.</p>
         """)
