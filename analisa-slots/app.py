@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.responses import HTMLResponse
-import json, re, subprocess, os
+import json, re, subprocess
 
 app = FastAPI(title="Analisador de Slots")
 
@@ -19,29 +19,23 @@ JOGOS = [
 @app.get("/")
 def analisar(vod_id: str = "2712188263"):
     cli_path = "/app/TwitchDownloaderCLI"
-    output_file = "vod_info.json"
     
     try:
-        # Debug: mostra arquivos na pasta
-        files = os.listdir("/app")
-        
+        # Sem flag -o → capturamos direto o stdout
         result = subprocess.run([
             cli_path, "info",
             "--id", vod_id,
-            "--format", "json",
-            "-o", output_file
+            "--format", "json"
         ], capture_output=True, text=True, timeout=60)
-        
+
         if result.returncode != 0:
             return HTMLResponse(f"""
                 <h2>❌ Erro no TwitchDownloaderCLI</h2>
-                <p>Arquivos na pasta: {files}</p>
                 <pre>STDERR: {result.stderr}</pre>
                 <pre>STDOUT: {result.stdout}</pre>
             """)
-        
-        with open(output_file) as f:
-            data = json.load(f)
+
+        data = json.loads(result.stdout)
 
         chapters = data.get('chapters') or (data.get('video', {}).get('chapters') if isinstance(data, dict) else [])
 
@@ -66,8 +60,4 @@ def analisar(vod_id: str = "2712188263"):
         return HTMLResponse(html)
 
     except Exception as e:
-        return HTMLResponse(f"""
-            <h2>❌ Erro geral</h2>
-            <pre>{str(e)}</pre>
-            <p>Verifique o log completo no Cloud Run.</p>
-        """)
+        return HTMLResponse(f"<h2>❌ Erro geral: {str(e)}</h2>")
