@@ -1,10 +1,10 @@
 FROM python:3.11-slim
 
-RUN apt-get update && apt-get install -y wget unzip && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y wget unzip ffmpeg && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
-# Baixa TwitchDownloaderCLI
+# Baixa TwitchDownloaderCLI (versão 1.56.4)
 RUN wget https://github.com/lay295/TwitchDownloader/releases/download/1.56.4/TwitchDownloaderCLI-1.56.4-Linux-x64.zip && \
     unzip TwitchDownloaderCLI-1.56.4-Linux-x64.zip && \
     chmod +x TwitchDownloaderCLI && \
