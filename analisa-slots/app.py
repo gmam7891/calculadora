@@ -18,21 +18,31 @@ JOGOS = [
 
 @app.get("/")
 def analisar(vod_id: str = "2712188263"):
+    cli_path = "/app/TwitchDownloaderCLI"
+    output_file = "vod_info.json"
+    
     try:
-        subprocess.run(["./TwitchDownloaderCLI", "info", "--id", vod_id, "--format", "raw", "-o", "vod_info.json"], check=True, timeout=30)
+        # Comando corrigido com caminho ABSOLUTO e flags corretas
+        result = subprocess.run([
+            cli_path, "info",
+            "--id", vod_id,
+            "--format", "json",      # mais confiável que raw
+            "-o", output_file
+        ], capture_output=True, text=True, timeout=45)
         
-        with open('vod_info.json') as f:
+        if result.returncode != 0:
+            return HTMLResponse(f"""
+                <h2>❌ Erro ao rodar TwitchDownloaderCLI</h2>
+                <pre>{result.stderr}</pre>
+                <p>Stdout: {result.stdout}</p>
+            """)
+        
+        with open(output_file) as f:
             data = json.load(f)
 
-        # Extração robusta dos capítulos
-        chapters = []
-        if isinstance(data, dict):
-            if 'chapters' in data:
-                chapters = data['chapters']
-            elif 'video' in data and isinstance(data['video'], dict) and 'chapters' in data['video']:
-                chapters = data['video']['chapters']
+        chapters = data.get('chapters') or (data.get('video', {}).get('chapters') if isinstance(data, dict) else [])
 
-        html = f"<h1>🎰 Análise VOD {vod_id}</h1><table border='1' cellpadding='8'><tr><th>Jogo</th><th>Tempo (minutos)</th></tr>"
+        html = f"<h1>🎰 Análise VOD {vod_id}</h1><table border='1' cellpadding='10'><tr><th>Jogo</th><th>Tempo (minutos)</th></tr>"
         total_area_link = 0
 
         for nome, padrao in JOGOS:
@@ -49,7 +59,12 @@ def analisar(vod_id: str = "2712188263"):
                 total_area_link += minutos
 
         html += f"</table><h2>Total Família Area Link™: <b>{total_area_link} minutos</b></h2>"
-        html += "<p>✅ Análise concluída!</p>"
+        html += "<p>✅ Análise concluída com sucesso!</p>"
         return HTMLResponse(html)
+
     except Exception as e:
-        return HTMLResponse(f"<h2>Erro: {str(e)}</h2>")
+        return HTMLResponse(f"""
+            <h2>❌ Erro geral</h2>
+            <pre>{str(e)}</pre>
+            <p>Verifique se o TwitchDownloaderCLI está em /app/</p>
+        """)
