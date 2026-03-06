@@ -289,17 +289,17 @@ with tabs[1]:
                 else:
                     st.error("❌ PREJUÍZO")
 
-# ====================== ANALISADOR DE VOD (Área Link) ======================
+# ====================== ANALISADOR DE VOD (ÁREA LINK) ======================
 import subprocess
 import json
 import re
-from fastapi.responses import JSONResponse
-from typing import Dict, Any
+import streamlit as st
 
-def analisar_vod(vod_input: str) -> Dict[str, Any]:
-    """Analisa qualquer VOD da Twitch (URL ou ID)"""
+def analisar_vod(vod_input: str):
+    """Analisa qualquer VOD da Twitch"""
     vod_str = str(vod_input).strip()
 
+    # Extrai o ID
     if vod_str.isdigit():
         vod_id = vod_str
     else:
@@ -357,3 +357,30 @@ def analisar_vod(vod_input: str) -> Dict[str, Any]:
         }
     except Exception as e:
         return {"erro": str(e)}
+
+
+# ====================== INTERFACE STREAMLIT ======================
+st.title("🎰 Analisador de VOD - Área Link")
+
+vod_input = st.text_input(
+    "Cole aqui a URL completa da VOD (ou só o número/ID):",
+    placeholder="https://www.twitch.tv/videos/2712832544"
+)
+
+if st.button("🔍 Analisar VOD"):
+    if vod_input:
+        with st.spinner("Analisando a VOD..."):
+            resultado = analisar_vod(vod_input)
+
+        if "erro" in resultado:
+            st.error(f"Erro: {resultado['erro']}")
+        else:
+            st.success(f"✅ Análise concluída! VOD {resultado['vod_id']}")
+            
+            st.subheader("⏱ Tempos por jogo")
+            for jogo, minutos in resultado["tempos_por_jogo"].items():
+                st.write(f"**{jogo}**: {minutos} minutos")
+            
+            st.markdown(f"### Total Família Area Link™: **{resultado['total_area_link_minutos']} minutos**")
+    else:
+        st.warning("Cole uma URL ou ID primeiro!")
