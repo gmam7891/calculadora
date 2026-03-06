@@ -1,0 +1,75 @@
+name: Analisador de VOD - Área Link
+
+on:
+  workflow_dispatch:
+    inputs:
+      vod:
+        description: 'URL completa da VOD (ex: https://www.twitch.tv/videos/2714721010)'
+        required: true
+
+jobs:
+  analisar:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Baixar TwitchDownloaderCLI
+        run: |
+          wget https://github.com/lay295/TwitchDownloader/releases/download/1.56.4/TwitchDownloaderCLI-1.56.4-Linux-x64.zip
+          unzip TwitchDownloaderCLI-1.56.4-Linux-x64.zip
+          chmod +x TwitchDownloaderCLI
+
+      - name: Analisar VOD
+        run: |
+          python3 -c '
+import json, re, sys
+vod = "${{ inputs.vod }}"
+if vod.isdigit():
+    vod_id = vod
+else:
+    match = re.search(r"twitch\.tv/videos/(\d+)", vod)
+    vod_id = match.group(1) if match else vod
+
+import subprocess
+result = subprocess.run(["./TwitchDownloaderCLI", "info", "--id", vod_id, "--format", "raw"], capture_output=True, text=True)
+print(result.stdout)
+' > vod_info.json
+
+      - name: Gerar relatório
+        run: |
+          python3 - << 'EOF' >> $GITHUB_STEP_SUMMARY
+import json, re
+with open("vod_info.json") as f:
+    data = json.loads(f.read().strip())
+
+chapters = data.get("chapters") or []
+
+jogos = {
+    "Area Link™ Phoenix Firestorm": r"AreaVegas|PearFiction|Slingshot|Buck Stakes|Phoenix Firestorm",
+    "Area Link™ Bank Boss": r"AreaVegas|PearFiction|Slingshot|Buck Stakes|Bank Boss",
+    "Area Link™ Dragon": r"AreaVegas|PearFiction|Slingshot|Buck Stakes|Dragon",
+    "VoltedUP WildSurge": r"VoltedUP|WildSurge",
+    "Wacky Panda Power Combo": r"Wacky Panda",
+    "Squealin Riches 2": r"Squealin Riches",
+    "Treasures of Mjolnir": r"Mjolnir",
+    "FlyX Cash Turbo": r"FlyX|Cash Turbo"
+}
+
+print("# 🎰 Relatório de VOD")
+print("| Jogo | Tempo (minutos) |")
+print("|------|-----------------|")
+total = 0
+for nome, padrao in jogos.items():
+    tempo = 0
+    regex = re.compile(padrao, re.IGNORECASE)
+    for ch in chapters:
+        titulo = str(ch.get("title") or ch.get("game") or "")
+        if regex.search(titulo):
+            seg = ch.get("length") or ch.get("lengthSeconds") or 0
+            tempo += int(seg)
+    minutos = tempo // 60
+    print(f"| {nome} | {minutos} |")
+    if "Area Link" in nome:
+        total += minutos
+
+print(f"\n**Total Família Area Link™: {total} minutos**")
+print("\n✅ Análise concluída!")
+EOF
