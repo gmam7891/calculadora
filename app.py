@@ -289,17 +289,37 @@ with tabs[1]:
                 else:
                     st.error("❌ PREJUÍZO")
 
-# ====================== ANALISADOR DE VOD (ÁREA LINK) ======================
+# ====================== ANALISADOR DE VOD - ABA SEPARADA ======================
 import subprocess
 import json
 import re
+import os
 import streamlit as st
 
-def analisar_vod(vod_input: str):
-    """Analisa qualquer VOD da Twitch"""
-    vod_str = str(vod_input).strip()
+def garantir_tw_cli():
+    """Baixa o TwitchDownloaderCLI automaticamente se não existir"""
+    cli_path = "TwitchDownloaderCLI"
+    if os.path.exists(cli_path) and os.access(cli_path, os.X_OK):
+        return cli_path
+    
+    st.info("🔄 Baixando TwitchDownloaderCLI pela primeira vez...")
+    try:
+        subprocess.run(["wget", "-q", "https://github.com/lay295/TwitchDownloader/releases/download/1.56.4/TwitchDownloaderCLI-1.56.4-Linux-x64.zip"], check=True)
+        subprocess.run(["unzip", "-o", "TwitchDownloaderCLI-1.56.4-Linux-x64.zip"], check=True)
+        subprocess.run(["chmod", "+x", "TwitchDownloaderCLI"], check=True)
+        os.remove("TwitchDownloaderCLI-1.56.4-Linux-x64.zip")
+        st.success("✅ TwitchDownloaderCLI instalado!")
+        return cli_path
+    except:
+        st.error("❌ Não consegui baixar o TwitchDownloaderCLI. Instale manualmente.")
+        return None
 
-    # Extrai o ID
+def analisar_vod(vod_input: str):
+    cli = garantir_tw_cli()
+    if not cli:
+        return {"erro": "CLI não encontrado"}
+
+    vod_str = str(vod_input).strip()
     if vod_str.isdigit():
         vod_id = vod_str
     else:
@@ -307,11 +327,8 @@ def analisar_vod(vod_input: str):
         vod_id = match.group(1) if match else vod_str
 
     try:
-        result = subprocess.run([
-            "TwitchDownloaderCLI", "info",
-            "--id", vod_id,
-            "--format", "raw"
-        ], capture_output=True, text=True, timeout=90)
+        result = subprocess.run([cli, "info", "--id", vod_id, "--format", "raw"],
+                                capture_output=True, text=True, timeout=90)
 
         if result.returncode != 0:
             return {"erro": result.stderr.strip()}
@@ -336,7 +353,6 @@ def analisar_vod(vod_input: str):
 
         tempos = {}
         total_area_link = 0
-
         for nome, padrao in jogos_config.items():
             tempo_seg = 0
             regex = re.compile(padrao, re.IGNORECASE)
@@ -358,29 +374,31 @@ def analisar_vod(vod_input: str):
     except Exception as e:
         return {"erro": str(e)}
 
+# ====================== ABA NOVA NO STREAMLIT ======================
+tab1, tab2 = st.tabs(["📊 Página Principal", "🎰 Analisador de VOD - Área Link"])
 
-# ====================== INTERFACE STREAMLIT ======================
-st.title("🎰 Analisador de VOD - Área Link")
+with tab2:
+    st.title("🎰 Analisador de VOD - Área Link")
+    st.write("Cole qualquer URL da Twitch (qualquer streamer):")
 
-vod_input = st.text_input(
-    "Cole aqui a URL completa da VOD (ou só o número/ID):",
-    placeholder="https://www.twitch.tv/videos/2712832544"
-)
+    vod_input = st.text_input(
+        "URL ou ID da VOD",
+        placeholder="https://www.twitch.tv/videos/2714721010"
+    )
 
-if st.button("🔍 Analisar VOD"):
-    if vod_input:
-        with st.spinner("Analisando a VOD..."):
-            resultado = analisar_vod(vod_input)
+    if st.button("🔍 Analisar VOD", type="primary"):
+        if vod_input:
+            with st.spinner("Buscando capítulos da VOD..."):
+                resultado = analisar_vod(vod_input)
 
-        if "erro" in resultado:
-            st.error(f"Erro: {resultado['erro']}")
+            if "erro" in resultado:
+                st.error(f"Erro: {resultado['erro']}")
+            else:
+                st.success(f"✅ VOD {resultado['vod_id']} analisada!")
+                st.subheader("⏱ Tempos por jogo")
+                for jogo, minutos in resultado["tempos_por_jogo"].items():
+                    st.write(f"**{jogo}**: {minutos} minutos")
+                
+                st.markdown(f"### Total Família Area Link™: **{resultado['total_area_link_minutos']} minutos**")
         else:
-            st.success(f"✅ Análise concluída! VOD {resultado['vod_id']}")
-            
-            st.subheader("⏱ Tempos por jogo")
-            for jogo, minutos in resultado["tempos_por_jogo"].items():
-                st.write(f"**{jogo}**: {minutos} minutos")
-            
-            st.markdown(f"### Total Família Area Link™: **{resultado['total_area_link_minutos']} minutos**")
-    else:
-        st.warning("Cole uma URL ou ID primeiro!")
+            st.warning("Cole uma URL primeiro!")
