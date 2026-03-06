@@ -288,3 +288,72 @@ with tabs[1]:
                     st.warning("⚠️ Margem positiva")
                 else:
                     st.error("❌ PREJUÍZO")
+
+# ====================== ANALISADOR DE VOD (Área Link) ======================
+import subprocess
+import json
+import re
+from fastapi.responses import JSONResponse
+from typing import Dict, Any
+
+def analisar_vod(vod_input: str) -> Dict[str, Any]:
+    """Analisa qualquer VOD da Twitch (URL ou ID)"""
+    vod_str = str(vod_input).strip()
+
+    if vod_str.isdigit():
+        vod_id = vod_str
+    else:
+        match = re.search(r'twitch\.tv/videos/(\d+)', vod_str)
+        vod_id = match.group(1) if match else vod_str
+
+    try:
+        result = subprocess.run([
+            "TwitchDownloaderCLI", "info",
+            "--id", vod_id,
+            "--format", "raw"
+        ], capture_output=True, text=True, timeout=90)
+
+        if result.returncode != 0:
+            return {"erro": result.stderr.strip()}
+
+        try:
+            data = json.loads(result.stdout.strip())
+        except:
+            data = {}
+
+        chapters = data.get('chapters') or data.get('video', {}).get('chapters') or []
+
+        jogos_config = {
+            "Area Link™ Phoenix Firestorm": r"AreaVegas|PearFiction|Slingshot|Buck Stakes|Phoenix Firestorm|Phoenix.*Firestorm",
+            "Area Link™ Bank Boss": r"AreaVegas|PearFiction|Slingshot|Buck Stakes|Bank Boss|Bank.*Boss",
+            "Area Link™ Dragon": r"AreaVegas|PearFiction|Slingshot|Buck Stakes|Dragon|Area Link.*Dragon",
+            "VoltedUP WildSurge": r"VoltedUP|WildSurge|VoltedUP.*Wild|Wild.*Surge",
+            "Wacky Panda Power Combo": r"Wacky Panda|Wacky.*Panda|Power Combo",
+            "Squealin Riches 2": r"Squealin Riches|Squealin.*Riches",
+            "Treasures of Mjolnir": r"Treasures of Mjolnir|Treasures.*Mjolnir|Mjolnir",
+            "FlyX Cash Turbo": r"FlyX|Cash Turbo|FlyX.*Cash"
+        }
+
+        tempos = {}
+        total_area_link = 0
+
+        for nome, padrao in jogos_config.items():
+            tempo_seg = 0
+            regex = re.compile(padrao, re.IGNORECASE)
+            for ch in chapters:
+                titulo = str(ch.get('title') or ch.get('game') or "")
+                if regex.search(titulo):
+                    seg = ch.get('length') or ch.get('lengthSeconds') or 0
+                    tempo_seg += int(seg)
+            minutos = tempo_seg // 60
+            tempos[nome] = minutos
+            if "Area Link" in nome:
+                total_area_link += minutos
+
+        return {
+            "vod_id": vod_id,
+            "tempos_por_jogo": tempos,
+            "total_area_link_minutos": total_area_link
+        }
+    except Exception as e:
+        return {"erro": str(e)}
