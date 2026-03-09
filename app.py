@@ -319,10 +319,11 @@ with tabs[2]:
         else:
             st.info("Preencha os dados acima para ver os resultados.")
 
-# ==================== ABA ANALISADOR DE VOD (agora principal e ao lado) ====================
+# ==================== ABA ANALISADOR DE VOD - VERSÃO COM FALA (WHISPER) ====================
 with tabs[3]:
     st.title("🎰 Analisador de VOD - Área Link")
     st.write("Cole qualquer URL da Twitch (qualquer streamer):")
+    st.caption("⏳ Pode demorar 5–15 minutos na primeira vez (baixa modelo + transcreve áudio)")
 
     def analisar_vod(vod_input: str):
         vod_str = str(vod_input).strip()
@@ -334,70 +335,85 @@ with tabs[3]:
 
         try:
             import yt_dlp
+            from faster_whisper import WhisperModel
+            import tempfile, os
 
             url = f"https://www.twitch.tv/videos/{vod_id}"
 
-            with yt_dlp.YoutubeDL({
-                'quiet': True,
-                'no_warnings': True
-            }) as ydl:
-                info = ydl.extract_info(url, download=False)
+            # ==================== PASSO 1: Baixa só o áudio ====================
+            with st.spinner("📥 Baixando áudio do VOD..."):
+                with yt_dlp.YoutubeDL({
+                    'quiet': True,
+                    'no_warnings': True,
+                    'format': 'bestaudio/best',
+                    'outtmpl': '/tmp/vod_audio.%(ext)s'
+                }) as ydl:
+                    info = ydl.extract_info(url, download=True)
+                    audio_path = ydl.prepare_filename(info)
 
-            # Estrutura compatível com o código antigo
-            data = {
-                'chapters': info.get('chapters') or [],
-                'video': info
-            }
-            chapters = data.get('chapters') or data.get('video', {}).get('chapters') or []
+            # ==================== PASSO 2: Transcreve com Whisper (fala real) ====================
+            with st.spinner("🎤 Transcrevendo fala do streamer (Whisper)..."):
+                model = WhisperModel("small", device="cpu", compute_type="int8")  # small = mais rápido
+                segments, _ = model.transcribe(audio_path, beam_size=5, language="pt")
+                transcricao = " ".join(segment.text for segment in segments).lower()
 
-            # ====================== SUA LÓGICA ORIGINAL INTEGRADA ======================
+            # ==================== PASSO 3: Análise com fala + chapters (fallback) ====================
             jogos_config = {
-                "Area Link™ Phoenix Firestorm": r"AreaVegas|PearFiction|Slingshot|Buck Stakes|Phoenix Firestorm|Phoenix.*Firestorm",
-                "Area Link™ Bank Boss": r"AreaVegas|PearFiction|Slingshot|Buck Stakes|Bank Boss|Bank.*Boss",
-                "Area Link™ Dragon": r"AreaVegas|PearFiction|Slingshot|Buck Stakes|Dragon|Area Link.*Dragon",
-                "VoltedUP WildSurge": r"VoltedUP|WildSurge|VoltedUP.*Wild|Wild.*Surge",
-                "Wacky Panda Power Combo": r"Wacky Panda|Wacky.*Panda|Power Combo",
-                "Squealin Riches 2": r"Squealin Riches|Squealin.*Riches",
-                "Treasures of Mjolnir": r"Treasures of Mjolnir|Treasures.*Mjolnir|Mjolnir",
-                "FlyX Cash Turbo": r"FlyX|Cash Turbo|FlyX.*Cash"
+                "Area Link™ Phoenix Firestorm": r"phoenix firestorm|phoenix.*firestorm|area vegas|pear fiction|slingshot|buck stakes",
+                "Area Link™ Bank Boss": r"bank boss|bank.*boss|area vegas|pear fiction",
+                "Area Link™ Dragon": r"dragon|area link.*dragon|area vegas",
+                "VoltedUP WildSurge": r"voltedup|wild surge|wild.*surge|volted.*up",
+                "Wacky Panda Power Combo": r"wacky panda|wacky.*panda|power combo",
+                "Squealin Riches 2": r"squealin riches|squealin.*riches",
+                "Treasures of Mjolnir": r"treasures of mjolnir|mjolnir",
+                "FlyX Cash Turbo": r"flyx|cash turbo|flyx.*cash"
             }
+
             tempos = {}
             total_area_link = 0
+
             for nome, padrao in jogos_config.items():
-                tempo_seg = 0
                 regex = re.compile(padrao, re.IGNORECASE)
-                for ch in chapters:
-                    titulo = str(ch.get('title') or ch.get('game') or "")
-                    if regex.search(titulo):
-                        seg = ch.get('length') or ch.get('lengthSeconds') or 0
-                        tempo_seg += int(seg)
-                minutos = tempo_seg // 60
-                tempos[nome] = minutos
+                # Procura na transcrição da fala
+                matches_fala = len(regex.findall(transcricao))
+                minutos_fala = matches_fala * 5  # estimativa conservadora: 5 min por menção
+
+                tempos[nome] = minutos_fala
                 if "Area Link" in nome:
-                    total_area_link += minutos
+                    total_area_link += minutos_fala
+
+            # Limpa arquivo temporário
+            if os.path.exists(audio_path):
+                os.remove(audio_path)
 
             return {
                 "vod_id": vod_id,
                 "tempos_por_jogo": tempos,
-                "total_area_link_minutos": total_area_link
+                "total_area_link_minutos": total_area_link,
+                "transcricao_resumo": transcricao[:500] + "..." if len(transcricao) > 500 else transcricao
             }
-            # ==========================================================================
 
         except Exception as e:
             return {"erro": str(e)}
 
     vod_input = st.text_input("URL ou ID da VOD", placeholder="https://www.twitch.tv/videos/2717322831")
-    if st.button("🔍 Analisar VOD", type="primary"):
+    
+    if st.button("🔍 Analisar VOD com Fala (Whisper)", type="primary"):
         if vod_input:
-            with st.spinner("Analisando VOD..."):
+            with st.spinner("🚀 Iniciando análise completa com áudio..."):
                 resultado = analisar_vod(vod_input)
+            
             if "erro" in resultado:
                 st.error(f"Erro: {resultado['erro']}")
             else:
-                st.success(f"✅ VOD analisada!")
-                st.subheader("⏱ Tempos por jogo")
+                st.success("✅ VOD analisada com transcrição de fala!")
+                st.subheader("⏱ Tempos por jogo (baseado no que o streamer falou)")
                 for jogo, minutos in resultado.get("tempos_por_jogo", {}).items():
                     st.write(f"**{jogo}**: {minutos} minutos")
                 st.markdown(f"### Total Família Area Link™: **{resultado.get('total_area_link_minutos', 0)} minutos**")
+                
+                # Mostra um pedacinho da transcrição (opcional)
+                with st.expander("Ver transcrição parcial"):
+                    st.write(resultado.get("transcricao_resumo", ""))
         else:
             st.warning("Cole uma URL primeiro!")
