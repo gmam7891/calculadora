@@ -342,29 +342,40 @@ with tabs[3]:
                 return False
 
     def analisar_vod(vod_input: str):
-        if not instalar_tw_cli():
-            return {"erro": "CLI não encontrado"}
-        # (resto da função analisar_vod exatamente como você tinha)
-        vod_str = str(vod_input).strip()
-        if vod_str.isdigit():
-            vod_id = vod_str
-        else:
-            match = re.search(r'twitch\.tv/videos/(\d+)', vod_str)
-            vod_id = match.group(1) if match else vod_str
-        try:
-            import subprocess, json
-            result = subprocess.run(["./TwitchDownloaderCLI", "info", "--id", vod_id, "--format", "raw"],
-                                    capture_output=True, text=True, timeout=90)
-            if result.returncode != 0:
-                return {"erro": result.stderr.strip()}
-            data = json.loads(result.stdout.strip())
-            chapters = data.get('chapters') or data.get('video', {}).get('chapters') or []
-            # (todo o resto da lógica de jogos e tempos exatamente como estava)
-            jogos_config = { ... }  # mantenha o dicionário que você já tem
-            # ... (código completo da análise - copiei do seu original)
-            # Retorno final igual
-        except Exception as e:
-            return {"erro": str(e)}
+    vod_str = str(vod_input).strip()
+    if vod_str.isdigit():
+        vod_id = vod_str
+    else:
+        match = re.search(r'twitch\.tv/videos/(\d+)', vod_str)
+        vod_id = match.group(1) if match else vod_str
+
+    try:
+        import yt_dlp
+
+        url = f"https://www.twitch.tv/videos/{vod_id}"
+
+        with yt_dlp.YoutubeDL({
+            'quiet': True,
+            'no_warnings': True
+        }) as ydl:
+            info = ydl.extract_info(url, download=False)
+
+        # Simula exatamente a estrutura que seu código antigo esperava
+        data = {
+            'chapters': info.get('chapters') or [],
+            'video': info
+        }
+
+        chapters = data.get('chapters') or data.get('video', {}).get('chapters') or []
+
+        # === AQUI CONTINUA TODO O SEU CÓDIGO ORIGINAL ===
+        # (todo o resto da lógica de jogos e tempos exatamente como estava)
+        jogos_config = { ... }  # mantenha o dicionário que você já tem
+        # ... (código completo da análise - cole aqui tudo que vinha depois)
+        # Retorno final igual ao que você já tinha
+
+    except Exception as e:
+        return {"erro": str(e)}
 
     vod_input = st.text_input("URL ou ID da VOD", placeholder="https://www.twitch.tv/videos/2714721010")
     if st.button("🔍 Analisar VOD", type="primary"):
