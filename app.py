@@ -324,60 +324,69 @@ with tabs[3]:
     st.title("🎰 Analisador de VOD - Área Link")
     st.write("Cole qualquer URL da Twitch (qualquer streamer):")
 
-    # Funções de instalação e análise (mantidas)
-    def instalar_tw_cli():
-        if os.path.exists("TwitchDownloaderCLI") and os.access("TwitchDownloaderCLI", os.X_OK):
-            return True
-        with st.spinner("🔄 Baixando TwitchDownloaderCLI..."):
-            try:
-                import subprocess
-                subprocess.run(["wget", "-q", "https://github.com/lay295/TwitchDownloader/releases/download/1.56.4/TwitchDownloaderCLI-1.56.4-Linux-x64.zip"], check=True)
-                subprocess.run(["unzip", "-o", "TwitchDownloaderCLI-1.56.4-Linux-x64.zip"], check=True)
-                subprocess.run(["chmod", "+x", "TwitchDownloaderCLI"], check=True)
-                os.remove("TwitchDownloaderCLI-1.56.4-Linux-x64.zip")
-                st.success("✅ TwitchDownloaderCLI instalado!")
-                return True
-            except:
-                st.error("❌ Não consegui instalar automaticamente.")
-                return False
-
     def analisar_vod(vod_input: str):
-    vod_str = str(vod_input).strip()
-    if vod_str.isdigit():
-        vod_id = vod_str
-    else:
-        match = re.search(r'twitch\.tv/videos/(\d+)', vod_str)
-        vod_id = match.group(1) if match else vod_str
+        vod_str = str(vod_input).strip()
+        if vod_str.isdigit():
+            vod_id = vod_str
+        else:
+            match = re.search(r'twitch\.tv/videos/(\d+)', vod_str)
+            vod_id = match.group(1) if match else vod_str
 
-    try:
-        import yt_dlp
+        try:
+            import yt_dlp
 
-        url = f"https://www.twitch.tv/videos/{vod_id}"
+            url = f"https://www.twitch.tv/videos/{vod_id}"
 
-        with yt_dlp.YoutubeDL({
-            'quiet': True,
-            'no_warnings': True
-        }) as ydl:
-            info = ydl.extract_info(url, download=False)
+            with yt_dlp.YoutubeDL({
+                'quiet': True,
+                'no_warnings': True
+            }) as ydl:
+                info = ydl.extract_info(url, download=False)
 
-        # Simula exatamente a estrutura que seu código antigo esperava
-        data = {
-            'chapters': info.get('chapters') or [],
-            'video': info
-        }
+            # Estrutura compatível com o código antigo
+            data = {
+                'chapters': info.get('chapters') or [],
+                'video': info
+            }
+            chapters = data.get('chapters') or data.get('video', {}).get('chapters') or []
 
-        chapters = data.get('chapters') or data.get('video', {}).get('chapters') or []
+            # ====================== SUA LÓGICA ORIGINAL INTEGRADA ======================
+            jogos_config = {
+                "Area Link™ Phoenix Firestorm": r"AreaVegas|PearFiction|Slingshot|Buck Stakes|Phoenix Firestorm|Phoenix.*Firestorm",
+                "Area Link™ Bank Boss": r"AreaVegas|PearFiction|Slingshot|Buck Stakes|Bank Boss|Bank.*Boss",
+                "Area Link™ Dragon": r"AreaVegas|PearFiction|Slingshot|Buck Stakes|Dragon|Area Link.*Dragon",
+                "VoltedUP WildSurge": r"VoltedUP|WildSurge|VoltedUP.*Wild|Wild.*Surge",
+                "Wacky Panda Power Combo": r"Wacky Panda|Wacky.*Panda|Power Combo",
+                "Squealin Riches 2": r"Squealin Riches|Squealin.*Riches",
+                "Treasures of Mjolnir": r"Treasures of Mjolnir|Treasures.*Mjolnir|Mjolnir",
+                "FlyX Cash Turbo": r"FlyX|Cash Turbo|FlyX.*Cash"
+            }
+            tempos = {}
+            total_area_link = 0
+            for nome, padrao in jogos_config.items():
+                tempo_seg = 0
+                regex = re.compile(padrao, re.IGNORECASE)
+                for ch in chapters:
+                    titulo = str(ch.get('title') or ch.get('game') or "")
+                    if regex.search(titulo):
+                        seg = ch.get('length') or ch.get('lengthSeconds') or 0
+                        tempo_seg += int(seg)
+                minutos = tempo_seg // 60
+                tempos[nome] = minutos
+                if "Area Link" in nome:
+                    total_area_link += minutos
 
-        # === AQUI CONTINUA TODO O SEU CÓDIGO ORIGINAL ===
-        # (todo o resto da lógica de jogos e tempos exatamente como estava)
-        jogos_config = { ... }  # mantenha o dicionário que você já tem
-        # ... (código completo da análise - cole aqui tudo que vinha depois)
-        # Retorno final igual ao que você já tinha
+            return {
+                "vod_id": vod_id,
+                "tempos_por_jogo": tempos,
+                "total_area_link_minutos": total_area_link
+            }
+            # ==========================================================================
 
-    except Exception as e:
-        return {"erro": str(e)}
+        except Exception as e:
+            return {"erro": str(e)}
 
-    vod_input = st.text_input("URL ou ID da VOD", placeholder="https://www.twitch.tv/videos/2714721010")
+    vod_input = st.text_input("URL ou ID da VOD", placeholder="https://www.twitch.tv/videos/2717322831")
     if st.button("🔍 Analisar VOD", type="primary"):
         if vod_input:
             with st.spinner("Analisando VOD..."):
