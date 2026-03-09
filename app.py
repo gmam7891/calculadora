@@ -107,7 +107,7 @@ db_path = os.getenv("APP_DB_PATH", "./data/app.db")
 conn = connect(db_path)
 init_db(conn)
 
-tabs = st.tabs(["Instagram", "Twitch (Avg/Peak + Projeções)", "🎯 Calculadora Demográfica ICP", "🎰 Analisador de VOD - Área Link"])
+tabs = st.tabs(["Instagram", "Twitch", "Calculadora ICP", "Analisador de VOD"])
 
 # ==================== ABA INSTAGRAM ====================
 with tabs[0]:
