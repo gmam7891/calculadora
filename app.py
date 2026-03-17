@@ -272,60 +272,108 @@ with tabs[2]:
 
     with col1:
         st.subheader("📊 Dados do Influenciador")
-        total_seguidores = st.number_input("Total de Seguidores", min_value=0, value=10000, step=1000, key="demo_seguidores")
-        
+        total_seguidores = st.number_input(
+            "Total de Seguidores",
+            min_value=0,
+            value=0,
+            step=1000,
+            key="demo_seguidores"
+        )
+
         st.markdown("**Filtros do ICP (perfil ideal do cliente)**")
-        perc_idade   = st.slider("% Idade que bate com ICP", 0, 100, 35, step=5, key="demo_idade")   / 100.0
-        perc_pais    = st.slider("% no País-alvo (ex: Brasil)", 0, 100, 80, step=5, key="demo_pais")  / 100.0
-        perc_genero  = st.slider("% Gênero que bate com ICP", 0, 100, 60, step=5, key="demo_genero") / 100.0
-        
+        perc_idade = st.number_input(
+            "% Idade que bate com ICP",
+            min_value=0.0,
+            max_value=100.0,
+            value=0.0,
+            step=1.0,
+            format="%.1f",
+            key="demo_idade"
+        ) / 100.0
+
+        perc_pais = st.number_input(
+            "% no País-alvo (ex: Brasil)",
+            min_value=0.0,
+            max_value=100.0,
+            value=0.0,
+            step=1.0,
+            format="%.1f",
+            key="demo_pais"
+        ) / 100.0
+
+        perc_genero = st.number_input(
+            "% Gênero que bate com ICP",
+            min_value=0.0,
+            max_value=100.0,
+            value=0.0,
+            step=1.0,
+            format="%.1f",
+            key="demo_genero"
+        ) / 100.0
+
         st.markdown("**Engajamento esperado**")
-        taxa_engajamento = st.slider("Taxa de Engajamento realista (%)", 0.0, 15.0, 2.5, step=0.5, key="demo_eng") / 100.0
+        taxa_engajamento = st.number_input(
+            "Taxa de Engajamento realista (%)",
+            min_value=0.0,
+            max_value=100.0,
+            value=0.0,
+            step=0.1,
+            format="%.2f",
+            key="demo_eng"
+        ) / 100.0
 
         st.markdown("---")
         st.caption("Opcional: comparação com sua base atual")
-        tamanho_base = st.number_input("Tamanho da sua base atual de leads/clientes", min_value=0, value=0, step=500, key="demo_base")
+        tamanho_base = st.number_input(
+            "Tamanho da sua base atual de leads/clientes",
+            min_value=0,
+            value=0,
+            step=500,
+            key="demo_base"
+        )
 
     with col2:
         st.subheader("📈 Alcance Real do ICP")
 
-        if total_seguidores > 0:
-            # Cálculo em etapas (mais didático)
+        if total_seguidores > 0 and (perc_idade > 0 or perc_pais > 0 or perc_genero > 0):
+            # Cálculo em etapas (mais transparente)
             potenciais_brutos = total_seguidores * perc_idade * perc_pais * perc_genero
-            perc_icp_final = (potenciais_brutos / total_seguidores) * 100 if total_seguidores > 0 else 0
-            
+            perc_icp_final = (potenciais_brutos / total_seguidores) * 100 if total_seguidores > 0 else 0.0
+
             leads_estimados = potenciais_brutos * taxa_engajamento
-            
+
             # Métricas principais
-            st.metric("**% real de potenciais compradores (ICP)**", f"{perc_icp_final:.1f}%")
-            st.metric("Pessoas reais no ICP", f"{int(round(potenciais_brutos)):,}".replace(",", "."))
-            
+            st.metric("**% real de potenciais compradores (ICP)**", f"{perc_icp_final:.2f}%")
+            st.metric("Pessoas reais no ICP", fmt_int(potenciais_brutos))
+
             st.markdown("---")
-            
-            st.metric("Leads realistas esperados (com engajamento)", f"{int(round(leads_estimados)):,}".replace(",", "."))
-            
-            if tamanho_base > 0:
+
+            st.metric("Leads realistas esperados (com engajamento)", fmt_int(leads_estimados))
+
+            if tamanho_base > 0 and leads_estimados > 0:
                 crescimento = (leads_estimados / tamanho_base) * 100
-                st.metric("Crescimento potencial da base", f"+{crescimento:.0f}%", delta_color="normal")
-            
-            # Visualização simples de funil
+                st.metric("Crescimento potencial da base", f"+{crescimento:.1f}%")
+
+            # Funil visual simples
             st.markdown("**Funil aproximado**")
             dados_funil = pd.DataFrame({
-                "Etapa": ["Seguidores totais", "ICP (após filtros)", "Leads estimados"],
+                "Etapa": ["Seguidores totais", "Após filtros ICP", "Leads estimados"],
                 "Quantidade": [total_seguidores, round(potenciais_brutos), round(leads_estimados)]
             })
             st.bar_chart(dados_funil.set_index("Etapa"))
 
-            # Interpretação textual
-            if perc_icp_final >= 25:
-                st.success(f"🎯 Audiência **muito qualificada** ({perc_icp_final:.1f}% dentro do ICP)")
+            # Interpretação
+            if perc_icp_final >= 30:
+                st.success(f"Audiência **muito alinhada** ({perc_icp_final:.1f}% dentro do ICP)")
             elif perc_icp_final >= 10:
-                st.info(f"Audiência razoavelmente alinhada ({perc_icp_final:.1f}% no ICP)")
+                st.info(f"Audiência razoavelmente qualificada ({perc_icp_final:.1f}% no ICP)")
+            elif perc_icp_final > 0:
+                st.warning(f"Apenas {perc_icp_final:.1f}% da base está no ICP — pode ser desafiador")
             else:
-                st.warning(f"Apenas {perc_icp_final:.1f}% da audiência está dentro do ICP — pode ser pouco eficiente")
+                st.info("Ajuste os filtros de ICP para ver o resultado.")
 
         else:
-            st.info("Preencha o total de seguidores para começar.")
+            st.info("Informe o total de seguidores e pelo menos um filtro de ICP para ver os resultados.")
 
 # ==================== ABA ANALISADOR DE VOD - VERSÃO COM FALA (WHISPER) ====================
 with tabs[3]:
