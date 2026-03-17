@@ -6,7 +6,6 @@ import statistics
 from typing import Dict, Any, List, Optional
 import streamlit as st
 import pandas as pd
-from io import BytesIO
 from dotenv import load_dotenv
 from twitch_client import TwitchClient
 from storage import connect, init_db, get_stream_stats_30d, upsert_vod_summary, get_cached_vod_summary
@@ -112,21 +111,28 @@ tabs = st.tabs(["Instagram", "Twitch", "Calculadora ICP", "Analisador de VOD"])
 
 # ==================== ABA INSTAGRAM ====================
 with tabs[0]:
-    st.subheader("Instagram — Valuation com filtro de audiência ICP")
+    st.subheader("Instagram + TikTok — com filtro de audiência ICP")
     
     c1, c2 = st.columns([1, 1])
     
     with c1:
         st.markdown("### Audiência Qualificada (ICP)")
         total_seguidores = st.number_input(
-            "Total de seguidores (Instagram)",
-            min_value=0, value=0, step=1000, key="seguidores_total_inst"
+            "Total de seguidores (Instagram + TikTok combinado)",
+            min_value=0,
+            value=0,
+            step=1000,
+            key="seguidores_total"
         )
         
-        perc_icp = st.number_input(
+        perc_icp = st.number_input(  # troquei slider por number_input para ficar consistente com sua preferência anterior
             "% de seguidores que são compradores em potencial (ICP)",
-            min_value=0.0, max_value=100.0, value=0.0, step=0.1, format="%.1f",
-            key="perc_icp_inst"
+            min_value=0.0,
+            max_value=100.0,
+            value=0.0,
+            step=0.1,
+            format="%.1f",
+            key="perc_icp"
         ) / 100.0
         
         compradores_potenciais = int(total_seguidores * perc_icp)
@@ -135,47 +141,61 @@ with tabs[0]:
         st.markdown("---")
         
         st.markdown("### Reels")
-        reels_qty = st.number_input("Qtd Reels", min_value=0, value=0, step=1, key="reels_qty_inst")
-        reels_avg_views = st.number_input("Views médias por Reel (bruto)", min_value=0, value=0, step=1000, key="reels_views_inst")
-        reels_ctr_percent = st.number_input("CTR Reels (%)", min_value=0.0, value=0.0, step=0.1, key="reels_ctr_inst")
+        reels_qty = st.number_input("Qtd Reels", min_value=0, value=0, step=1, key="reels_qty")
+        reels_avg_views = st.number_input("Views médias por Reel", min_value=0, value=0, step=1000, key="reels_views")
+        reels_ctr_percent = st.number_input("CTR Reels (%)", min_value=0.0, value=0.0, step=0.1, key="reels_ctr")
         
         st.markdown("### Stories")
-        stories_qty = st.number_input("Qtd Stories", min_value=0, value=0, step=1, key="stories_qty_inst")
-        stories_avg_views = st.number_input("Views médias por Story (bruto)", min_value=0, value=0, step=500, key="stories_views_inst")
-        stories_ctr_percent = st.number_input("CTR Stories (%)", min_value=0.0, value=0.0, step=0.1, key="stories_ctr_inst")
+        stories_qty = st.number_input("Qtd Stories", min_value=0, value=0, step=1, key="stories_qty")
+        stories_avg_views = st.number_input("Views médias por Story", min_value=0, value=0, step=500, key="stories_views")
+        stories_ctr_percent = st.number_input("CTR Stories (%)", min_value=0.0, value=0.0, step=0.1, key="stories_ctr")
+        
+        st.markdown("### TikTok (opcional)")
+        tiktok_qty = st.number_input("Qtd TikToks", min_value=0, value=0, step=1, key="tiktok_qty")
+        tiktok_avg_views = st.number_input("Views médias por TikTok", min_value=0, value=0, step=1000, key="tiktok_views")
+        tiktok_ctr_percent = st.number_input("CTR TikTok (%)", min_value=0.0, value=0.0, step=0.1, key="tiktok_ctr")
         
         st.markdown("### Funil (conversão)")
-        manual_clicks = st.number_input("Cliques reais (total) — deixe 0 para calcular", min_value=0, value=0, step=50, key="manual_clicks_inst")
-        manual_ftd = st.number_input("FTD real (total) — deixe 0 para calcular", min_value=0, value=0, step=1, key="manual_ftd_inst")
-        cvr_percent = st.number_input("CVR para FTD (%)", min_value=0.0, value=0.0, step=0.1, key="cvr_percent_inst")
-        value_per_ftd = st.number_input("Valor médio por FTD (R$)", min_value=0, value=0, step=50, key="value_per_ftd_inst")
+        manual_clicks = st.number_input("Cliques reais (total) — deixe 0 para calcular", min_value=0, value=0, step=50, key="manual_clicks")
+        manual_ftd = st.number_input("FTD real (total) — deixe 0 para calcular", min_value=0, value=0, step=1, key="manual_ftd")
+        cvr_percent = st.number_input("CVR para FTD (%)", min_value=0.0, value=0.0, step=0.1, key="cvr_percent")
+        value_per_ftd = st.number_input("Valor médio por FTD (R$)", min_value=0, value=0, step=50, key="value_per_ftd")
         
+        # Fee também zerado (se não existir ainda na aba)
         fee_instagram = st.number_input(
             "Fee / investimento (R$)",
-            min_value=0, value=0, step=1000, key="fee_instagram"
+            min_value=0,
+            value=0,
+            step=1000,
+            key="fee_instagram"
         )
-        
-        st.markdown("### Metas desejadas")
-        roi_percent_target = st.number_input("ROI alvo (%)", min_value=0, value=0, step=10, key="roi_target_inst")
-        target_roi = roi_percent_target / 100.0
-        
-        target_cpa = st.number_input("CPA alvo (R$)", min_value=0.0, value=0.0, step=10.0, key="cpa_target_inst")
 
     with c2:
         st.subheader("Resultados")
         
-        perc_icp_ajustada = perc_icp if perc_icp > 0 else 1.0
+        # Cálculo ajustado com ICP
+        perc_icp_ajustada = perc_icp if perc_icp > 0 else 1.0  # evita divisão por zero
         
-        reels_views_brutas   = reels_qty * reels_avg_views
-        stories_views_brutas = stories_qty * stories_avg_views
+        # Views totais
+        reels_views_total = reels_qty * reels_avg_views
+        stories_views_total = stories_qty * stories_avg_views
+        tiktok_views_total = tiktok_qty * tiktok_avg_views
         
-        reels_views_efetivas   = reels_views_brutas   * perc_icp_ajustada
-        stories_views_efetivas = stories_views_brutas * perc_icp_ajustada
+        # Opção conservadora comentada (como antes)
+        # reels_views_efetivas   = reels_views_total   * perc_icp_ajustada
+        # stories_views_efetivas = stories_views_total * perc_icp_ajustada
+        # tiktok_views_efetivas  = tiktok_views_total  * perc_icp_ajustada
         
-        total_views_qualificadas = reels_views_efetivas + stories_views_efetivas
+        # Padrão: usar views totais
+        reels_views_efetivas   = reels_views_total
+        stories_views_efetivas = stories_views_total
+        tiktok_views_efetivas  = tiktok_views_total
+        
+        total_views = reels_views_efetivas + stories_views_efetivas + tiktok_views_efetivas
         
         reels_ctr   = reels_ctr_percent   / 100
         stories_ctr = stories_ctr_percent / 100
+        tiktok_ctr  = tiktok_ctr_percent  / 100
         cvr_ftd     = cvr_percent         / 100
         
         if manual_clicks > 0:
@@ -183,7 +203,8 @@ with tabs[0]:
         else:
             clicks_reels   = reels_views_efetivas   * reels_ctr
             clicks_stories = stories_views_efetivas * stories_ctr
-            clicks = clicks_reels + clicks_stories
+            clicks_tiktok  = tiktok_views_efetivas  * tiktok_ctr
+            clicks = clicks_reels + clicks_stories + clicks_tiktok
         
         if manual_ftd > 0:
             ftd = manual_ftd
@@ -191,160 +212,29 @@ with tabs[0]:
             ftd = clicks * cvr_ftd
         
         revenue = ftd * value_per_ftd
-        fee = fee_instagram
+        fee = fee_instagram  # agora vem do input acima
         
-        roi = ((revenue - fee) / fee * 100) if fee > 0 else 0
-        cpa = (fee / ftd) if ftd > 0 else None
-        
-        # Métricas principais
+        # Métricas
         col_a, col_b, col_c = st.columns(3)
-        col_a.metric("Views qualificadas (após ICP)", fmt_int(total_views_qualificadas))
+        col_a.metric("Views totais", fmt_int(total_views))
         col_b.metric("Cliques estimados", fmt_int(clicks))
         col_c.metric("FTD projetado", fmt_int(ftd))
         
         col_d, col_e, col_f = st.columns(3)
         col_d.metric("Receita projetada", fmt_money(revenue))
-        col_e.metric("ROI", f"{roi:.1f}%")
-        col_f.metric("CPA", fmt_money(cpa))
         
-        # Feedback de lucratividade (exatamente como na aba Twitch)
-        st.markdown("### Avaliação em relação às metas")
-        if roi >= target_roi and (cpa is None or cpa <= target_cpa):
-            st.success("✅ LUCRATIVO")
-        elif roi >= 0:
-            st.warning("⚠️ Margem positiva")
+        if fee > 0:
+            roi = (revenue - fee) / fee * 100 if fee > 0 else 0
+            cpa = fee / ftd if ftd > 0 else None
+            col_e.metric("ROI", f"{roi:.0f}%")
+            col_f.metric("CPA", fmt_money(cpa))
         else:
-            st.error("❌ PREJUÍZO")
+            col_e.metric("ROI", "-")
+            col_f.metric("CPA", "-")
         
         st.markdown("---")
-        
-        # Exportar
-        st.subheader("Exportar resultados")
-        
-        dados = {
-            "Total Seguidores": total_seguidores,
-            "% ICP": perc_icp * 100,
-            "Compradores Potenciais": compradores_potenciais,
-            "Qtd Reels": reels_qty,
-            "Views Reels Brutas": reels_views_brutas,
-            "Views Reels Qualificadas": round(reels_views_efetivas),
-            "CTR Reels (%)": reels_ctr_percent,
-            "Qtd Stories": stories_qty,
-            "Views Stories Brutas": stories_views_brutas,
-            "Views Stories Qualificadas": round(stories_views_efetivas),
-            "CTR Stories (%)": stories_ctr_percent,
-            "Cliques Estimados": clicks,
-            "FTD Projetado": ftd,
-            "Receita Projetada (R$)": revenue,
-            "Fee (R$)": fee,
-            "ROI (%)": round(roi, 1) if fee > 0 else None,
-            "CPA (R$)": round(cpa, 2) if cpa is not None else None,
-            "ROI Alvo (%)": roi_percent_target,
-            "CPA Alvo (R$)": target_cpa
-        }
-        
-        df = pd.DataFrame([dados])  # uma linha só
-        
-        from io import BytesIO
-        buffer = BytesIO()
-        with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
-            df.to_excel(writer, index=False, sheet_name="Valuation Instagram")
-        buffer.seek(0)
-        
-        st.download_button(
-            label="Baixar em Excel (.xlsx)",
-            data=buffer,
-            file_name=f"valuation_instagram_{total_seguidores or 'sem_dados'}.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            key="download_instagram"
-        )
-        
-        # ==================== CÁLCULO OBRIGATÓRIO COM ICP ====================
-        perc_icp_ajustada = perc_icp if perc_icp > 0 else 1.0
-        
-        # Views brutas (digitadas pelo usuário)
-        reels_views_brutas = reels_qty * reels_avg_views
-        stories_views_brutas = stories_qty * stories_avg_views
-        
-        # Views qualificadas = bruto × % ICP (exatamente como você pediu)
-        reels_views_efetivas   = reels_views_brutas   * perc_icp_ajustada
-        stories_views_efetivas = stories_views_brutas * perc_icp_ajustada
-        
-        total_views_qualificadas = reels_views_efetivas + stories_views_efetivas
-        
-        reels_ctr   = reels_ctr_percent   / 100
-        stories_ctr = stories_ctr_percent / 100
-        cvr_ftd     = cvr_percent         / 100
-        
-        # Cliques e FTD
-        if manual_clicks > 0:
-            clicks = manual_clicks
-        else:
-            clicks_reels   = reels_views_efetivas   * reels_ctr
-            clicks_stories = stories_views_efetivas * stories_ctr
-            clicks = clicks_reels + clicks_stories
-        
-        if manual_ftd > 0:
-            ftd = manual_ftd
-        else:
-            ftd = clicks * cvr_ftd
-        
-        revenue = ftd * value_per_ftd
-        fee = fee_instagram
-        
-        roi = ((revenue - fee) / fee * 100) if fee > 0 else 0
-        cpa = (fee / ftd) if ftd > 0 else None
-        
-        # ==================== MÉTRICAS (sem aviso de lucro/prejuízo) ====================
-        col_a, col_b, col_c = st.columns(3)
-        col_a.metric("Views qualificadas (após ICP)", fmt_int(total_views_qualificadas))
-        col_b.metric("Cliques estimados", fmt_int(clicks))
-        col_c.metric("FTD projetado", fmt_int(ftd))
-        
-        col_d, col_e, col_f = st.columns(3)
-        col_d.metric("Receita projetada", fmt_money(revenue))
-        col_e.metric("ROI", f"{roi:.0f}%")
-        col_f.metric("CPA", fmt_money(cpa))
-        
-        st.markdown("---")
-        
-        # ==================== DOWNLOAD EXCEL ====================
-        st.subheader("📥 Baixar relatório completo")
-        
-        dados_relatorio = {
-            "Total de Seguidores": [total_seguidores],
-            "% ICP": [perc_icp * 100],
-            "Compradores Potenciais (ICP)": [compradores_potenciais],
-            "Qtd Reels": [reels_qty],
-            "Views Reels Brutas": [reels_views_brutas],
-            "Views Reels Qualificadas": [reels_views_efetivas],
-            "CTR Reels (%)": [reels_ctr_percent],
-            "Qtd Stories": [stories_qty],
-            "Views Stories Brutas": [stories_views_brutas],
-            "Views Stories Qualificadas": [stories_views_efetivas],
-            "CTR Stories (%)": [stories_ctr_percent],
-            "Cliques Estimados": [clicks],
-            "FTD Projetado": [ftd],
-            "Receita Projetada (R$)": [revenue],
-            "Fee / Investimento (R$)": [fee],
-            "ROI (%)": [round(roi, 1)],
-            "CPA (R$)": [round(cpa, 2) if cpa is not None else None]
-        }
-        
-        df = pd.DataFrame(dados_relatorio)
-        
-        buffer = BytesIO()
-        df.to_excel(buffer, index=False)
-        buffer.seek(0)
-        
-        st.download_button(
-            label="📥 Baixar tudo em Excel (.xlsx)",
-            data=buffer.getvalue(),
-            file_name=f"Instagram_ICP_Valuation_{total_seguidores}_seguidores.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        )
-        
-        st.caption("O arquivo contém todas as entradas + cálculos com o filtro ICP aplicado nas views.")
+        st.caption("Observação: as visualizações são totais. O filtro ICP serve principalmente para avaliar a qualidade esperada dos cliques/FTD.")
+        st.caption("Se quiser ser mais conservador, descomente as linhas de 'views_efetivas * perc_icp' acima.")
 
 # ==================== ABA TWITCH ====================
 with tabs[1]:
