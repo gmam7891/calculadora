@@ -266,58 +266,66 @@ with tabs[1]:
 # ==================== ABA CALCULADORA DEMOGRÁFICA ICP (AGORA TODOS ZERADOS) ====================
 with tabs[2]:
     st.title("🎯 Calculadora Demográfica ICP")
-    st.markdown("Calcule quantos seguidores realmente são **potenciais clientes** usando % Idade, % País e % Gênero.")
+    st.markdown("Descubra qual **% real** da audiência do influenciador é potencial cliente (ICP).")
 
     col1, col2 = st.columns([1, 1])
 
     with col1:
         st.subheader("📊 Dados do Influenciador")
-        total_seguidores = st.number_input("Total de Seguidores", min_value=0, value=0, step=1000, key="demo_seguidores")
-        perc_idade = st.number_input("% Idade que bate com ICP", min_value=0, max_value=100, value=0, step=1, key="demo_idade") / 100.0
-        perc_pais = st.number_input("% País principal (ex: Brasil)", min_value=0, max_value=100, value=0, step=1, key="demo_pais") / 100.0
-        perc_genero = st.number_input("% Gênero que bate com ICP", min_value=0, max_value=100, value=0, step=1, key="demo_genero") / 100.0
-        taxa_engajamento = st.number_input("Taxa de Engajamento (%)", min_value=0.0, value=0.0, step=0.1, key="demo_eng") / 100.0
-        tamanho_base = st.number_input("Tamanho da sua base atual de leads", min_value=0, value=0, step=1000, key="demo_base")
+        total_seguidores = st.number_input("Total de Seguidores", min_value=0, value=10000, step=1000, key="demo_seguidores")
+        
+        st.markdown("**Filtros do ICP (perfil ideal do cliente)**")
+        perc_idade   = st.slider("% Idade que bate com ICP", 0, 100, 35, step=5, key="demo_idade")   / 100.0
+        perc_pais    = st.slider("% no País-alvo (ex: Brasil)", 0, 100, 80, step=5, key="demo_pais")  / 100.0
+        perc_genero  = st.slider("% Gênero que bate com ICP", 0, 100, 60, step=5, key="demo_genero") / 100.0
+        
+        st.markdown("**Engajamento esperado**")
+        taxa_engajamento = st.slider("Taxa de Engajamento realista (%)", 0.0, 15.0, 2.5, step=0.5, key="demo_eng") / 100.0
 
-        st.subheader("💰 Dados Financeiros")
-        fee = st.number_input("Fee / Investimento (R$)", min_value=0, value=0, step=1000, key="demo_fee")
-        cvr_percent = st.number_input("CVR para FTD (%)", min_value=0, value=0, step=1, key="demo_cvr") / 100.0
-        value_per_ftd = st.number_input("Valor por FTD (R$)", min_value=0, value=0, step=50, key="demo_vftd")
+        st.markdown("---")
+        st.caption("Opcional: comparação com sua base atual")
+        tamanho_base = st.number_input("Tamanho da sua base atual de leads/clientes", min_value=0, value=0, step=500, key="demo_base")
 
     with col2:
-        st.subheader("📈 Resultados Automáticos")
-        if total_seguidores > 0 and taxa_engajamento > 0:
-            res = calcular_viabilidade_audiencia({
-                "totalSeguidores": total_seguidores,
-                "percIdade": perc_idade,
-                "percPais": perc_pais,
-                "percGenero": perc_genero,
-                "taxaEngajamento": taxa_engajamento,
-                "fee": fee,
-                "cvr_ftd": cvr_percent,
-                "value_per_ftd": value_per_ftd,
-                "tamanhoBase": tamanho_base
+        st.subheader("📈 Alcance Real do ICP")
+
+        if total_seguidores > 0:
+            # Cálculo em etapas (mais didático)
+            potenciais_brutos = total_seguidores * perc_idade * perc_pais * perc_genero
+            perc_icp_final = (potenciais_brutos / total_seguidores) * 100 if total_seguidores > 0 else 0
+            
+            leads_estimados = potenciais_brutos * taxa_engajamento
+            
+            # Métricas principais
+            st.metric("**% real de potenciais compradores (ICP)**", f"{perc_icp_final:.1f}%")
+            st.metric("Pessoas reais no ICP", f"{int(round(potenciais_brutos)):,}".replace(",", "."))
+            
+            st.markdown("---")
+            
+            st.metric("Leads realistas esperados (com engajamento)", f"{int(round(leads_estimados)):,}".replace(",", "."))
+            
+            if tamanho_base > 0:
+                crescimento = (leads_estimados / tamanho_base) * 100
+                st.metric("Crescimento potencial da base", f"+{crescimento:.0f}%", delta_color="normal")
+            
+            # Visualização simples de funil
+            st.markdown("**Funil aproximado**")
+            dados_funil = pd.DataFrame({
+                "Etapa": ["Seguidores totais", "ICP (após filtros)", "Leads estimados"],
+                "Quantidade": [total_seguidores, round(potenciais_brutos), round(leads_estimados)]
             })
+            st.bar_chart(dados_funil.set_index("Etapa"))
 
-            r1, r2, r3 = st.columns(3)
-            r1.metric("Seguidores Potenciais (ICP)", fmt_int(res["seguidores_potenciais"]))
-            r2.metric("Leads Estimados", fmt_int(res["leads_estimados"]))
-            r3.metric("FTD Projetado", fmt_int(res["ftd_estimado"]))
-
-            r4, r5, r6, r7 = st.columns(4)
-            r4.metric("Receita Estimada", fmt_money(res["receita_estimada"]))
-            r5.metric("CPA Estimado", fmt_money(res["cpa"]))
-            r6.metric("ROI Estimado", f"{res['roi']}%")
-            r7.metric("Crescimento da Base", f"{res['crescimento_base']}%")
-
-            if "MUITO VIÁVEL" in res["viabilidade"]:
-                st.success(res["viabilidade"])
-            elif "VIÁVEL" in res["viabilidade"]:
-                st.warning(res["viabilidade"])
+            # Interpretação textual
+            if perc_icp_final >= 25:
+                st.success(f"🎯 Audiência **muito qualificada** ({perc_icp_final:.1f}% dentro do ICP)")
+            elif perc_icp_final >= 10:
+                st.info(f"Audiência razoavelmente alinhada ({perc_icp_final:.1f}% no ICP)")
             else:
-                st.error(res["viabilidade"])
+                st.warning(f"Apenas {perc_icp_final:.1f}% da audiência está dentro do ICP — pode ser pouco eficiente")
+
         else:
-            st.info("Preencha os dados acima para ver os resultados.")
+            st.info("Preencha o total de seguidores para começar.")
 
 # ==================== ABA ANALISADOR DE VOD - VERSÃO COM FALA (WHISPER) ====================
 with tabs[3]:
